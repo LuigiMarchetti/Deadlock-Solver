@@ -138,24 +138,18 @@ class DeadlockApp:
                              (e.start == edge.end and e.end == edge.start))
 
         if existing_edges > 1:
-            # Draw curved edge if multiple edges exist between the same nodes
+            # Draw curved edge
             curve = 0.2 * (existing_edges - 1)
             mid_x = (start_x + end_x) / 2
             mid_y = (start_y + end_y) / 2
             control_x = mid_x - (start_y - end_y) * curve
             control_y = mid_y + (start_x - end_x) * curve
 
-            if edge.line_id:
-                self.canvas.coords(edge.line_id, start_x, start_y, control_x, control_y, end_x, end_y)
-            else:
-                edge.line_id = self.canvas.create_line(start_x, start_y, control_x, control_y, end_x, end_y,
-                                                       smooth=True, arrow=tk.LAST, splinesteps=32)
+            edge.line_id = self.canvas.create_line(start_x, start_y, control_x, control_y, end_x, end_y,
+                                                   smooth=True, arrow=tk.LAST, splinesteps=32)
         else:
             # Draw straight edge
-            if edge.line_id:
-                self.canvas.coords(edge.line_id, start_x, start_y, end_x, end_y)
-            else:
-                edge.line_id = self.canvas.create_line(start_x, start_y, end_x, end_y, arrow=tk.LAST)
+            edge.line_id = self.canvas.create_line(start_x, start_y, end_x, end_y, arrow=tk.LAST)
 
     def redraw_edges(self):
         for edge in self.edges:
@@ -170,17 +164,27 @@ class DeadlockApp:
                              (e.start == edge.start and e.end == edge.end) or
                              (e.start == edge.end and e.end == edge.start))
 
-        if existing_edges > 1:
-            # Draw curved edge if multiple edges exist between the same nodes
-            curve = 0.2 * (existing_edges - 1)
-            mid_x = (start_x + end_x) / 2
-            mid_y = (start_y + end_y) / 2
-            control_x = mid_x - (start_y - end_y) * curve
-            control_y = mid_y + (start_x - end_x) * curve
-            self.canvas.coords(edge.line_id, start_x, start_y, control_x, control_y, end_x, end_y)
-        else:
-            # Draw straight edge
+        if existing_edges == 1:
+            # For the first edge, always draw a straight line
             self.canvas.coords(edge.line_id, start_x, start_y, end_x, end_y)
+        else:
+            # For subsequent edges, maintain curvature
+            for index, e in enumerate(self.edges):
+                if (e.start == edge.start and e.end == edge.end) or (e.start == edge.end and e.end == edge.start):
+                    # Calculate curvature based on the edge index (for additional edges)
+                    curve_index = index - 1  # First edge is straight, so index from 1 for curved edges
+                    curve_factor = 0.2 * curve_index  # Control how far the curve goes
+
+                    # Calculate mid-point between start and end points
+                    mid_x = (start_x + end_x) / 2
+                    mid_y = (start_y + end_y) / 2
+
+                    # Adjust the control point based on curvature
+                    control_x = mid_x - (start_y - end_y) * curve_factor
+                    control_y = mid_y + (start_x - end_x) * curve_factor
+
+                    # Update the edge with a smooth curved line
+                    self.canvas.coords(e.line_id, start_x, start_y, control_x, control_y, end_x, end_y)
 
     def on_click(self, event):
         self.selected_node = self.find_node_at_position(event.x, event.y)
@@ -194,11 +198,7 @@ class DeadlockApp:
             self.selected_node.x = event.x
             self.selected_node.y = event.y
             self.update_node_disponibilities(self.selected_node)
-
-            # Update edge positions instead of redrawing
-            for edge in self.edges:
-                if edge.start == self.selected_node or edge.end == self.selected_node:
-                    self.update_edge_position(edge)
+            self.redraw_edges()
 
     def update_node_disponibilities(self, node):
         if node.node_type == "R":
@@ -231,31 +231,31 @@ class DeadlockApp:
         self.selected_node = None
         self.edge_start = None
 
-    def getAlocatedResources(self, i, j):
-        processNumber = i
-        resourceNumber = j
-        allocatedResources = 0
+    def get_allocated_resources(self, i, j):
+        process_number = i
+        resource_number = j
+        allocated_resources = 0
 
         for edge in self.edges:
             # When the edge starts in the Rj and ends in Pi, allocatedResources + 1
-            if (edge.start.node_type == "R" and edge.start.number == resourceNumber)\
-                and (edge.end.node_type == "P" and edge.end.number == processNumber):
-                allocatedResources += 1
+            if (edge.start.node_type == "R" and edge.start.number == resource_number)\
+                and (edge.end.node_type == "P" and edge.end.number == process_number):
+                allocated_resources += 1
 
-        return allocatedResources
+        return allocated_resources
 
-    def getMaxResources(self, i, j):
-        processNumber = i
-        resourceNumber = j
-        maxResources = 0
+    def get_max_resources(self, i, j):
+        process_number = i
+        resource_number = j
+        max_resources = 0
 
         for edge in self.edges:
             # When the edge starts in the Pi and ends in Rj, maxResources + 1
-            if (edge.start.node_type == "P" and edge.start.number == processNumber)\
-                and (edge.end.node_type == "R" and edge.end.number == resourceNumber):
-                maxResources += 1
+            if (edge.start.node_type == "P" and edge.start.number == process_number)\
+                and (edge.end.node_type == "R" and edge.end.number == resource_number):
+                max_resources += 1
 
-        return maxResources
+        return max_resources
 
     def avoid_deadlock(self):
         resources = 0
@@ -271,8 +271,8 @@ class DeadlockApp:
 
         for i in range(processes):
             for j in range(resources):
-                allocated_resources[f'P{i}'][j] = self.getAlocatedResources(i, j)
-                needed_resources[f'P{i}'][j] = self.getMaxResources(i, j)
+                allocated_resources[f'P{i}'][j] = self.get_allocated_resources(i, j)
+                needed_resources[f'P{i}'][j] = self.get_max_resources(i, j)
 
         print("\nAllocated Resources Table:")
         for proc, res in allocated_resources.items():
@@ -329,7 +329,11 @@ class DeadlockApp:
             return
 
         step = steps.pop(0)
-        edges_to_remove = [edge for edge in self.edges if edge.start.number == step or edge.end.number == step]
+
+        edges_to_remove = []
+        for edge in self.edges:
+            if (edge.start.node_type == 'P' and edge.start.number == step) or (edge.end.node_type == 'P' and edge.end.number == step):
+                edges_to_remove.append(edge)
 
         for edge in edges_to_remove:
             self.canvas.itemconfig(edge.line_id, fill='red', width=2)
