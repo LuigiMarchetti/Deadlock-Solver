@@ -1,4 +1,4 @@
-# Deadlock Analyzer
+# Deadlock Solver
 
 ## Project Overview
 This Deadlock Analyzer is a graphical application developed as part of a work assignment for the Computer Science program at FURB University, 6th semester, 2024. The project aims to visualize and analyze potential deadlock situations in resource allocation systems.
