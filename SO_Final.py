@@ -8,8 +8,11 @@ class DeadlockApp:
         self.root = root
         self.canvas = tk.Canvas(root, width=800, height=600)
         self.canvas.pack()
-        self.p_counter = 1
-        self.r_counter = 1
+        self.root.title("Deadlock Analyzer")
+        self.root.resizable(False, False)
+        self.root.attributes("-fullscreen", False)
+        self.p_counter = 0
+        self.r_counter = 0
         self.nodes = []
         self.edges = []
         self.selected_node = None
@@ -94,7 +97,15 @@ class DeadlockApp:
             self.selected_node = None
 
     def remove_connected_edges(self, node):
+        edges_to_remove = [edge for edge in self.edges if edge.start == node or edge.end == node]
+
+        # Delete the graphical representation of the edges from the canvas
+        for edge in edges_to_remove:
+            self.canvas.delete(edge.line_id)
+
+        # Remove the edges from the edges list
         self.edges = [edge for edge in self.edges if edge.start != node and edge.end != node]
+
         self.redraw_edges()
 
     def start_add_edge(self):
@@ -111,6 +122,7 @@ class DeadlockApp:
                 self.canvas.bind("<Button-1>", self.on_click)
 
     def add_edge(self, start, end):
+        self.selected_node = None
         if (start.node_type == "P" and end.node_type == "R") or (start.node_type == "R" and end.node_type == "P"):
             edge = Edge(start, end)
             self.edges.append(edge)
@@ -126,24 +138,49 @@ class DeadlockApp:
                              (e.start == edge.end and e.end == edge.start))
 
         if existing_edges > 1:
-            # Draw curved edge
+            # Draw curved edge if multiple edges exist between the same nodes
             curve = 0.2 * (existing_edges - 1)
             mid_x = (start_x + end_x) / 2
             mid_y = (start_y + end_y) / 2
             control_x = mid_x - (start_y - end_y) * curve
             control_y = mid_y + (start_x - end_x) * curve
 
-            edge.line_id = self.canvas.create_line(start_x, start_y, control_x, control_y, end_x, end_y,
-                                                   smooth=True, arrow=tk.LAST, splinesteps=32)
+            if edge.line_id:
+                self.canvas.coords(edge.line_id, start_x, start_y, control_x, control_y, end_x, end_y)
+            else:
+                edge.line_id = self.canvas.create_line(start_x, start_y, control_x, control_y, end_x, end_y,
+                                                       smooth=True, arrow=tk.LAST, splinesteps=32)
         else:
             # Draw straight edge
-            edge.line_id = self.canvas.create_line(start_x, start_y, end_x, end_y, arrow=tk.LAST)
+            if edge.line_id:
+                self.canvas.coords(edge.line_id, start_x, start_y, end_x, end_y)
+            else:
+                edge.line_id = self.canvas.create_line(start_x, start_y, end_x, end_y, arrow=tk.LAST)
 
     def redraw_edges(self):
         for edge in self.edges:
-            self.canvas.delete(edge.line_id)
-        for edge in self.edges:
-            self.draw_edge(edge)
+            self.update_edge_position(edge)
+
+    def update_edge_position(self, edge):
+        start_x, start_y = edge.start.x, edge.start.y
+        end_x, end_y = edge.end.x, edge.end.y
+
+        # Count existing edges between these nodes to determine if curvature is needed
+        existing_edges = sum(1 for e in self.edges if
+                             (e.start == edge.start and e.end == edge.end) or
+                             (e.start == edge.end and e.end == edge.start))
+
+        if existing_edges > 1:
+            # Draw curved edge if multiple edges exist between the same nodes
+            curve = 0.2 * (existing_edges - 1)
+            mid_x = (start_x + end_x) / 2
+            mid_y = (start_y + end_y) / 2
+            control_x = mid_x - (start_y - end_y) * curve
+            control_y = mid_y + (start_x - end_x) * curve
+            self.canvas.coords(edge.line_id, start_x, start_y, control_x, control_y, end_x, end_y)
+        else:
+            # Draw straight edge
+            self.canvas.coords(edge.line_id, start_x, start_y, end_x, end_y)
 
     def on_click(self, event):
         self.selected_node = self.find_node_at_position(event.x, event.y)
@@ -157,7 +194,11 @@ class DeadlockApp:
             self.selected_node.x = event.x
             self.selected_node.y = event.y
             self.update_node_disponibilities(self.selected_node)
-            self.redraw_edges()
+
+            # Update edge positions instead of redrawing
+            for edge in self.edges:
+                if edge.start == self.selected_node or edge.end == self.selected_node:
+                    self.update_edge_position(edge)
 
     def update_node_disponibilities(self, node):
         if node.node_type == "R":
@@ -173,17 +214,26 @@ class DeadlockApp:
         return None
 
     def clear_all(self):
-        self.canvas.delete("all")
+        # Delete only nodes and edges, not the entire canvas
+        for node in self.nodes:
+            self.canvas.delete(node.id)
+            self.canvas.delete(node.text_id)
+            for dot_id in node.dot_ids:
+                self.canvas.delete(dot_id)
+
+        for edge in self.edges:
+            self.canvas.delete(edge.line_id)
+
         self.nodes.clear()
         self.edges.clear()
-        self.p_counter = 1
-        self.r_counter = 1
+        self.p_counter = 0
+        self.r_counter = 0
         self.selected_node = None
         self.edge_start = None
 
     def getAlocatedResources(self, i, j):
-        processNumber = i + 1
-        resourceNumber = j + 1
+        processNumber = i
+        resourceNumber = j
         allocatedResources = 0
 
         for edge in self.edges:
@@ -195,8 +245,8 @@ class DeadlockApp:
         return allocatedResources
 
     def getMaxResources(self, i, j):
-        processNumber = i + 1
-        resourceNumber = j + 1
+        processNumber = i
+        resourceNumber = j
         maxResources = 0
 
         for edge in self.edges:
@@ -219,20 +269,17 @@ class DeadlockApp:
         allocated_resources = {f'P{i}': [0] * resources for i in range(processes)}
         needed_resources = {f'P{i}': [0] * resources for i in range(processes)}
 
-        print(allocated_resources)
-        print(needed_resources)
-
         for i in range(processes):
             for j in range(resources):
                 allocated_resources[f'P{i}'][j] = self.getAlocatedResources(i, j)
                 needed_resources[f'P{i}'][j] = self.getMaxResources(i, j)
 
-        print("\n")
-        for process, resources in allocated_resources.items():
-            print(f"{process}: {resources}")
-        print("")
-        for process, resources in needed_resources.items():
-            print(f"{process}: {resources}")
+        print("\nAllocated Resources Table:")
+        for proc, res in allocated_resources.items():
+            print(f"{proc}: {res}")
+        print("\nNeeded Resources Table:")
+        for proc, res in needed_resources.items():
+            print(f"{proc}: {res}")
 
         total_allocated_resources = [0 for _ in range(resources)]
         max_resources = [0 for _ in range(resources)]
@@ -240,20 +287,19 @@ class DeadlockApp:
             for j in range(resources):
                 total_allocated_resources[j] += allocated_resources[f'P{i}'][j]
                 max_resources[j] += needed_resources[f'P{i}'][j]
-        print("Total Allocated Resources: " + str(total_allocated_resources))
+        print("\nTotal Allocated Resources: " + str(total_allocated_resources))
 
         total_available_resources = [0] * resources
         for node in self.nodes:
             if node.disponibilities > 0:
-                real_disponibility = node.disponibilities - total_allocated_resources[node.number - 1] - max_resources[
-                    node.number - 1]
-                total_available_resources[node.number - 1] += real_disponibility
+                real_disponibility = node.disponibilities - total_allocated_resources[node.number] #- max_resources[node.number]
+                total_available_resources[node.number] += real_disponibility
         print("Total Available Resources: " + str(total_available_resources))
 
         total_resources = [0] * resources
         for node in self.nodes:
             if node.disponibilities > 0:
-                total_resources[node.number - 1] += node.disponibilities
+                total_resources[node.number] += node.disponibilities
         print("Total Resources: " + str(total_resources))
 
         steps = []
@@ -271,137 +317,47 @@ class DeadlockApp:
                     del needed_resources[process]
                     steps.append(int(process[1:]))  # Convert 'P0', 'P1', etc. to 0, 1, etc.
                     break
-
-
-
-
-
-
-        graph = self.create_graph()
-        processes, resources = self.separate_processes_resources(graph)
-
-        # Initialize data structures for Banker's Algorithm
-        available = {r: graph[r]['disponibilities'] for r in resources}
-        max_need = {p: {r: 0 for r in resources} for p in processes}
-        allocation = {p: {r: 0 for r in resources} for p in processes}
-        need = {p: {r: 0 for r in resources} for p in processes}
-
-        # Populate max_need and allocation
-        for p in processes:
-            for r in graph[p]['edges']:
-                max_need[p][r] = max_need[p].get(r, 0) + 1
-                allocation[p][r] = allocation[p].get(r, 0) + 1
-                available[r] -= 1
-
-        # Calculate need
-        for p in processes:
-            for r in resources:
-                need[p][r] = max_need[p][r] - allocation[p][r]
-
-        steps = self.bankers_algorithm(processes, resources, available, max_need, allocation, need)
-
-        if not steps:
-            # If Banker's Algorithm couldn't find a solution, try to remove possible edges
-            steps = self.remove_possible_edges(graph)
-
-        self.animate_resolution(steps)
-
-    def separate_processes_resources(self, graph):
-        processes = [node for node, data in graph.items() if data['type'] == 'P']
-        resources = [node for node, data in graph.items() if data['type'] == 'R']
-        return processes, resources
-
-    def bankers_algorithm(self, processes, resources, available, max_need, allocation, need):
-        steps = []
-        work = available.copy()
-        finish = {p: False for p in processes}
-
-        while True:
-            found = False
-            for p in processes:
-                if not finish[p] and all(need[p][r] <= work[r] for r in resources):
-                    # Process can complete
-                    for r in resources:
-                        work[r] += allocation[p][r]
-                    finish[p] = True
-                    found = True
-                    # Add steps to remove edges
-                    for r in resources:
-                        if allocation[p][r] > 0:
-                            steps.append((p, r))
-
-            if not found:
+            else:
+                # If we've gone through all processes without finding a safe one, exit the loop
                 break
 
-        if all(finish.values()):
-            return steps
-        return None
+        self.animate_step(steps)
 
-    def remove_possible_edges(self, graph):
-        removed_edges = []
-        for p in [node for node, data in graph.items() if data['type'] == 'P']:
-            for r in list(graph[p]['edges']):  # Use list() to allow modification during iteration
-                if graph[r]['disponibilities'] > 0:
-                    graph[p]['edges'].remove(r)
-                    graph[r]['disponibilities'] += 1
-                    removed_edges.append((p, r))
-        return removed_edges
-
-    def animate_resolution(self, steps):
+    def animate_step(self, steps):
         if not steps:
-            messagebox.showinfo("Deadlock", "It's a deadlock!")
+            self.show_result_message()
             return
 
-        def animate_step(step_index):
-            if step_index < len(steps):
-                process, resource = steps[step_index]
-                edge_to_remove = next((edge for edge in self.edges
-                                       if f"{edge.start.node_type}{edge.start.number}" == process
-                                       and f"{edge.end.node_type}{edge.end.number}" == resource), None)
-                if edge_to_remove:
-                    self.canvas.itemconfig(edge_to_remove.line_id, fill='red', width=2)
-                    self.root.after(2000, lambda: self.remove_edge(edge_to_remove))
-                    self.root.after(2000, lambda: animate_step(step_index + 1))
-                else:
-                    animate_step(step_index + 1)
-            else:
-                self.show_resolution_result()
+        step = steps.pop(0)
+        edges_to_remove = [edge for edge in self.edges if edge.start.number == step or edge.end.number == step]
 
-        animate_step(0)
+        for edge in edges_to_remove:
+            self.canvas.itemconfig(edge.line_id, fill='red', width=2)
 
-    def show_resolution_result(self):
-        if any(edge.start.node_type == 'P' for edge in self.edges):
-            messagebox.showinfo("Partial Resolution", "Some edges were removed, but deadlock may still occur.")
+        self.root.after(2000, self.remove_edges_and_continue, edges_to_remove, steps)
+
+    def remove_edges_and_continue(self, edges_to_remove, remaining_steps):
+        for edge in edges_to_remove:
+            self.canvas.delete(edge.line_id)
+            self.edges.remove(edge)
+            if edge.end.node_type == 'R':
+                self.update_resource_disponibilities(edge.end)
+
+        self.animate_step(remaining_steps)
+
+    def show_result_message(self):
+        if any(self.edges):
+            messagebox.showinfo("DEADLOCK!!!", "Deadlock could not be avoided.")
         else:
             messagebox.showinfo("Resolution Complete", "Deadlock successfully avoided!")
-
-    def remove_edge(self, edge):
-        self.canvas.delete(edge.line_id)
-        self.edges.remove(edge)
-        self.update_resource_disponibilities(edge.end)
 
     def update_resource_disponibilities(self, resource_node):
         if resource_node.node_type == 'R':
             resource_node.disponibilities += 1
             self.canvas.delete(resource_node.text_id)
             resource_node.text_id = self.canvas.create_text(resource_node.x, resource_node.y,
-                                                            text=f"R{resource_node.number}\n({resource_node.disponibilities})")
+                                                            text = f"R{resource_node.number}\n({resource_node.disponibilities})")
 
-    def create_graph(self):
-        graph = {}
-        for node in self.nodes:
-            graph[f'{node.node_type}{node.number}'] = {
-                'type': node.node_type,
-                'edges': [],
-                'disponibilities': node.disponibilities if node.node_type == 'R' else 0
-            }
-
-        for edge in self.edges:
-            start = f"{edge.start.node_type}{edge.start.number}"
-            end = f"{edge.end.node_type}{edge.end.number}"
-            graph[start]['edges'].append(end)
-
-        return graph
 
 class Node:
     def __init__(self, id, text_id, node_type, number, x, y, disponibilities=0):
