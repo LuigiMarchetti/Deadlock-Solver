@@ -19,8 +19,8 @@ class DeadlockApp:
         self.edge_start = None
         self.setup_ui()
         self.add_attribution()
-        self.canvas.bind("<Button-1>", self.on_click)
-        self.canvas.bind("<B1-Motion>", self.on_drag)
+        self.canvas.bind("<Button-1>", self.on_click) # Event listener
+        self.canvas.bind("<B1-Motion>", self.on_drag) # Event listener
 
     def setup_ui(self):
         add_p_button = tk.Button(self.root, text="Add Process (P)", command=self.add_process)
@@ -42,6 +42,7 @@ class DeadlockApp:
         clear_button.pack(side=tk.LEFT)
 
     def add_attribution(self):
+        # anchor="e" aligns text to the right (east)
         self.canvas.create_text(780, 20, text="By Luigi G. Marchetti", anchor="e", font=("Arial", 10))
 
     def add_process(self):
@@ -80,9 +81,9 @@ class DeadlockApp:
     def draw_disponibilities(self, node):
         x, y = node.x, node.y
         for i in range(node.disponibilities):
-            angle = 2 * math.pi * i / node.disponibilities
-            dot_x = x + 20 * math.cos(angle)
-            dot_y = y + 20 * math.sin(angle)
+            angle = 2 * math.pi * i / node.disponibilities # Calculate the angle for the current dot
+            dot_x = x + 20 * math.cos(angle) # Calculate the x position of the dot
+            dot_y = y + 20 * math.sin(angle) # Calculate the y position of the dot
             dot_id = self.canvas.create_oval(dot_x - 3, dot_y - 3, dot_x + 3, dot_y + 3, fill="black")
             node.dot_ids.append(dot_id)
 
@@ -344,8 +345,6 @@ class DeadlockApp:
         for edge in edges_to_remove:
             self.canvas.delete(edge.line_id)
             self.edges.remove(edge)
-            if edge.end.node_type == 'R':
-                self.update_resource_disponibilities(edge.end)
 
         self.animate_step(remaining_steps)
 
@@ -354,14 +353,6 @@ class DeadlockApp:
             messagebox.showinfo("DEADLOCK!!!", "Deadlock could not be avoided.")
         else:
             messagebox.showinfo("Resolution Complete", "Deadlock successfully avoided!")
-
-    def update_resource_disponibilities(self, resource_node):
-        if resource_node.node_type == 'R':
-            resource_node.disponibilities += 1
-            self.canvas.delete(resource_node.text_id)
-            resource_node.text_id = self.canvas.create_text(resource_node.x, resource_node.y,
-                                                            text = f"R{resource_node.number}\n({resource_node.disponibilities})")
-
 
 class Node:
     def __init__(self, id, text_id, node_type, number, x, y, disponibilities=0):
@@ -382,7 +373,7 @@ class Edge:
         self.line_id = None
 
 
-if __name__ == "__main__":
-    root = tk.Tk()
+if __name__ == "__main__": # Only runs the app when the user runs this class
+    root = tk.Tk() # Creates the Tkinter's GUI (window)
     app = DeadlockApp(root)
-    root.mainloop()
+    root.mainloop() # Start event loop (event listening)
