@@ -146,10 +146,11 @@ class DeadlockApp:
             control_x = mid_x - (start_y - end_y) * curve
             control_y = mid_y + (start_x - end_x) * curve
 
+            # Creates a curved (smooth) line with 32 intermediate points and an arrow at the end of it
             edge.line_id = self.canvas.create_line(start_x, start_y, control_x, control_y, end_x, end_y,
                                                    smooth=True, arrow=tk.LAST, splinesteps=32)
         else:
-            # Draw straight edge
+            # Draw straight edge with an arrow at the end of it
             edge.line_id = self.canvas.create_line(start_x, start_y, end_x, end_y, arrow=tk.LAST)
 
     def redraw_edges(self):
@@ -192,8 +193,8 @@ class DeadlockApp:
 
     def on_drag(self, event):
         if self.selected_node:
-            dx = event.x - self.selected_node.x
-            dy = event.y - self.selected_node.y
+            dx = event.x - self.selected_node.x # Calculates the horizontal distance moved
+            dy = event.y - self.selected_node.y # Calculates the vertical distance moved
             self.canvas.move(self.selected_node.id, dx, dy)
             self.canvas.move(self.selected_node.text_id, dx, dy)
             self.selected_node.x = event.x
@@ -210,6 +211,7 @@ class DeadlockApp:
 
     def find_node_at_position(self, x, y):
         for node in self.nodes:
+            # Ensures that the user can click anywhere in the circle
             if (node.x - 25 <= x <= node.x + 25) and (node.y - 25 <= y <= node.y + 25):
                 return node
         return None
