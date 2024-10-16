@@ -170,23 +170,26 @@ class DeadlockApp:
             # For the first edge, always draw a straight line
             self.canvas.coords(edge.line_id, start_x, start_y, end_x, end_y)
         else:
-            # For subsequent edges, maintain curvature
+            # For multiple edges, draw curved lines for subsequent edges
             for index, e in enumerate(self.edges):
                 if (e.start == edge.start and e.end == edge.end) or (e.start == edge.end and e.end == edge.start):
-                    # Calculate curvature based on the edge index (for additional edges)
-                    curve_index = index - 1  # First edge is straight, so index from 1 for curved edges
-                    curve_factor = 0.2 * curve_index  # Control how far the curve goes
+                    # Calculate curve index (first edge is straight, so others start from index 1)
+                    curve_index = index - 1  # The first edge (index 0) is straight
+                    curve_factor = 0.2 * curve_index  # Control the curvature based on index
 
                     # Calculate mid-point between start and end points
                     mid_x = (start_x + end_x) / 2
                     mid_y = (start_y + end_y) / 2
 
-                    # Adjust the control point based on curvature
-                    control_x = mid_x - (start_y - end_y) * curve_factor
-                    control_y = mid_y + (start_x - end_x) * curve_factor
+                    # Calculate control point based on curvature
+                    control_x = mid_x + (start_y - end_y) * curve_factor
+                    control_y = mid_y - (start_x - end_x) * curve_factor
 
-                    # Update the edge with a smooth curved line
+                    # Update the edge to be a curved line with smooth steps
                     self.canvas.coords(e.line_id, start_x, start_y, control_x, control_y, end_x, end_y)
+
+                    # Apply smooth line with spline steps
+                    self.canvas.itemconfig(e.line_id, smooth=True, splinesteps=32)
 
     def on_click(self, event):
         self.selected_node = self.find_node_at_position(event.x, event.y)
