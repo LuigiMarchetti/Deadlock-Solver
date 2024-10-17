@@ -113,6 +113,7 @@ class DeadlockApp:
         self.canvas.bind("<Button-1>", self.on_edge_click)
 
     def on_edge_click(self, event):
+        self.selected_node = None # cleans selected node
         clicked_node = self.find_node_at_position(event.x, event.y)
         if clicked_node:
             if not self.edge_start:
@@ -123,7 +124,6 @@ class DeadlockApp:
                 self.canvas.bind("<Button-1>", self.on_click)
 
     def add_edge(self, start, end):
-        self.selected_node = None
         if (start.node_type == "P" and end.node_type == "R") or (start.node_type == "R" and end.node_type == "P"):
             edge = Edge(start, end)
             self.edges.append(edge)
@@ -250,18 +250,18 @@ class DeadlockApp:
 
         return allocated_resources
 
-    def get_max_resources(self, i, j):
+    def get_needed_resources(self, i, j):
         process_number = i
         resource_number = j
-        max_resources = 0
+        needed_resources = 0
 
         for edge in self.edges:
             # When the edge starts in the Pi and ends in Rj, maxResources + 1
             if (edge.start.node_type == "P" and edge.start.number == process_number)\
                 and (edge.end.node_type == "R" and edge.end.number == resource_number):
-                max_resources += 1
+                needed_resources += 1
 
-        return max_resources
+        return needed_resources
 
     def avoid_deadlock(self):
         resources = 0
@@ -278,7 +278,7 @@ class DeadlockApp:
         for i in range(processes):
             for j in range(resources):
                 allocated_resources[f'P{i}'][j] = self.get_allocated_resources(i, j)
-                needed_resources[f'P{i}'][j] = self.get_max_resources(i, j)
+                needed_resources[f'P{i}'][j] = self.get_needed_resources(i, j)
 
         print("\nAllocated Resources Table:")
         for proc, res in allocated_resources.items():
@@ -288,17 +288,15 @@ class DeadlockApp:
             print(f"{proc}: {res}")
 
         total_allocated_resources = [0 for _ in range(resources)]
-        max_resources = [0 for _ in range(resources)]
         for i in range(processes):
             for j in range(resources):
                 total_allocated_resources[j] += allocated_resources[f'P{i}'][j]
-                max_resources[j] += needed_resources[f'P{i}'][j]
         print("\nTotal Allocated Resources: " + str(total_allocated_resources))
 
         total_available_resources = [0] * resources
         for node in self.nodes:
             if node.disponibilities > 0:
-                real_disponibility = node.disponibilities - total_allocated_resources[node.number] #- max_resources[node.number]
+                real_disponibility = node.disponibilities - total_allocated_resources[node.number]
                 total_available_resources[node.number] += real_disponibility
         print("Total Available Resources: " + str(total_available_resources))
 
@@ -321,7 +319,7 @@ class DeadlockApp:
                     total_available_resources = new_total_available_resources
                     del allocated_resources[process]
                     del needed_resources[process]
-                    steps.append(int(process[1:]))  # Convert 'P0', 'P1', etc. to 0, 1, etc.
+                    steps.append(int(process[1:]))  # Converts using substring the 'P0', 'P1', etc. to 0, 1, etc.
                     break
             else:
                 # If we've gone through all processes without finding a safe one, exit the loop
@@ -334,7 +332,7 @@ class DeadlockApp:
             self.show_result_message()
             return
 
-        step = steps.pop(0)
+        step = steps.pop(0) # Gets the first element and remove it from the list
 
         edges_to_remove = []
         for edge in self.edges:
