@@ -187,27 +187,33 @@ class DeadlockApp:
             if available_dot is not None:
                 edge = Edge(start, end, dot_index=available_dot)
                 self.edges.append(edge)
-                self.draw_edge(edge)
+                self.draw_edge(edge, start, end)
                 start.occupied_dots[available_dot] = True
             else:
                 messagebox.showerror("Error", "No available resources.")
         elif start.node_type == "P" and end.node_type == "R":
             edge = Edge(start, end)
             self.edges.append(edge)
-            self.draw_edge(edge)
+            self.draw_edge(edge, start, end)
         else:
             messagebox.showerror("Error", "Invalid edge connection.")
 
-    def draw_edge(self, edge):
-        start_x, start_y = self.get_border_point(edge.start, edge.end.x, edge.end.y)
-        end_x, end_y = self.get_border_point(edge.end, edge.start.x, edge.start.y)
+    def draw_edge(self, edge, start, end):
+        if start.node_type == "R":
+            # For edges starting from a resource, use the dot position
+            start_x, start_y = self.get_dot_position(start, edge.dot_index)
+            end_x, end_y = self.get_border_point(end, start.x, start.y)
+        else:
+            # For edges starting from a process, use border points for both ends
+            start_x, start_y = self.get_border_point(start, end.x, end.y)
+            end_x, end_y = self.get_border_point(end, start.x, start.y)
 
         # Count existing edges between these nodes
         existing_edges = sum(1 for e in self.edges if
-                             (e.start == edge.start and e.end == edge.end) or
-                             (e.start == edge.end and e.end == edge.start))
+                             e.start.node_type == "P" and
+                             (e.start == edge.start and e.end == edge.end))
 
-        if existing_edges > 1:
+        if start.node_type == "P" and existing_edges > 1:
             # Draw curved edge
             curve = 0.2 * (existing_edges - 1)
             mid_x = (start_x + end_x) / 2
@@ -221,6 +227,12 @@ class DeadlockApp:
         else:
             # Draw straight edge with an arrow at the end of it
             edge.line_id = self.canvas.create_line(start_x, start_y, end_x, end_y, arrow=tk.LAST)
+
+    def get_dot_position(self, node, dot_index):
+        """Retrieve the position of the specified dot for a given node."""
+        if dot_index is not None and 0 <= dot_index < len(node.dot_positions):
+            return node.dot_positions[dot_index]
+        return node.x, node.y  # Fallback to the node's center if no dot is specified
 
     def get_border_point(self, node, x2, y2):
         """Calculate the point on the border of a node's boundary where the edge should connect."""
@@ -246,13 +258,24 @@ class DeadlockApp:
             self.update_edge_position(edge)
 
     def update_edge_position(self, edge):
-        start_x, start_y = self.get_border_point(edge.start, edge.end.x, edge.end.y)
-        end_x, end_y = self.get_border_point(edge.end, edge.start.x, edge.start.y)
+        if edge.start.node_type == "R":
+            # For edges starting from a resource, use the dot position
+            start_x, start_y = self.get_dot_position(edge.start, edge.dot_index)
+            end_x, end_y = self.get_border_point(edge.end, edge.start.x, edge.start.y)
+
+            self.canvas.coords(edge.line_id, start_x, start_y, end_x, end_y)
+            self.canvas.itemconfig(edge.line_id, smooth=False)
+
+            return
+        else:
+            # For edges starting from a process, use border points for both ends
+            start_x, start_y = self.get_border_point(edge.start, edge.end.x, edge.end.y)
+            end_x, end_y = self.get_border_point(edge.end, edge.start.x, edge.start.y)
 
         # Count existing edges between these nodes
         existing_edges = [e for e in self.edges if
-                          (e.start == edge.start and e.end == edge.end) or
-                          (e.start == edge.end and e.end == edge.start)]
+                          e.start.node_type == "P" and
+                          (e.start == edge.start and e.end == edge.end)]
         edge_count = len(existing_edges)
 
         if edge_count == 1:
@@ -260,16 +283,9 @@ class DeadlockApp:
             self.canvas.coords(edge.line_id, start_x, start_y, end_x, end_y)
             self.canvas.itemconfig(edge.line_id, smooth=False)
         else:
-            # For multiple edges, determine the arrow direction
-            last_edge = existing_edges[edge_count - 1]
-            last_start_x, last_start_y = self.get_border_point(last_edge.start, last_edge.end.x, last_edge.end.y)
-            last_end_x, last_end_y = self.get_border_point(last_edge.end, last_edge.start.x, last_edge.start.y)
-
-            # Determine the curvature direction based on the last edge
-            if last_start_x < last_end_x:  # Arrow points to the right
-                curve_direction = 1  # Curvature should go down
-            else:  # Arrow points to the left
-                curve_direction = -1  # Curvature should go up
+            # For multiple edges, calculate the curvature
+            edge_index = existing_edges.index(edge)
+            curve_factor = 0.2 * (edge_index - (edge_count - 1) / 2)
 
             # Calculate the midpoint and perpendicular vector
             mid_x, mid_y = (start_x + end_x) / 2, (start_y + end_y) / 2
@@ -279,9 +295,9 @@ class DeadlockApp:
                 return
             perpendicular_x, perpendicular_y = -dy / length, dx / length
 
-            # Calculate control point with consistent curvature direction
-            control_x = mid_x + curve_direction * perpendicular_x * 0.2 * length
-            control_y = mid_y + curve_direction * perpendicular_y * 0.2 * length
+            # Calculate control point
+            control_x = mid_x + perpendicular_x * curve_factor * length
+            control_y = mid_y + perpendicular_y * curve_factor * length
 
             # Update the edge to be a curved line
             self.canvas.coords(edge.line_id, start_x, start_y, control_x, control_y, end_x, end_y)
@@ -483,8 +499,8 @@ class Edge:
     def __init__(self, start, end, dot_index=None):
         self.start = start
         self.end = end
+        self.dot_index = dot_index  # Store which dot the edge starts from (if applicable)
         self.line_id = None
-        self.dot_index = dot_index
 
 
 if __name__ == "__main__": # Only runs the app when the user runs this class
