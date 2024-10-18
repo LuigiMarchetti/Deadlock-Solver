@@ -1,0 +1,22 @@
+{
+  "nodes": [
+    {"type": "P", "number": 0, "x": 150, "y": 150},
+    {"type": "P", "number": 1, "x": 370, "y": 470},
+    {"type": "P", "number": 2, "x": 530, "y": 400 },
+    {"type": "R", "number": 0, "disponibilities": 1, "x": 180, "y": 300},
+    {"type": "R", "number": 1, "disponibilities": 3,"x": 390, "y": 300},
+    {"type": "R", "number": 2, "disponibilities": 2,"x": 640, "y": 260}
+  ],
+  "edges": [
+    {"start_node": {"type": "P", "number": 0}, "end_node": {"type": "R", "number": 0}},
+    {"start_node": {"type": "R", "number": 0}, "end_node": {"type": "P", "number": 0}},
+    {"start_node": {"type": "P", "number": 0}, "end_node": {"type": "R", "number": 1}},
+    {"start_node": {"type": "P", "number": 1}, "end_node": {"type": "R", "number": 1}},
+    {"start_node": {"type": "R", "number": 1}, "end_node": {"type": "P", "number": 1}},
+    {"start_node": {"type": "R", "number": 1}, "end_node": {"type": "P", "number": 2}},
+    {"start_node": {"type": "R", "number": 2}, "end_node": {"type": "P", "number": 2}},
+    {"start_node": {"type": "P", "number": 2}, "end_node": {"type": "R", "number": 2}},
+    {"start_node": {"type": "P", "number": 2}, "end_node": {"type": "R", "number": 1}},
+    {"start_node": {"type": "P", "number": 0}, "end_node": {"type": "R", "number": 2}}
+  ]
+}

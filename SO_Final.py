@@ -3,9 +3,13 @@ from tkinter import simpledialog, messagebox
 import random
 import math
 
+from ScenarioImporter import ScenarioImporter
+
+
 class DeadlockApp:
     def __init__(self, root):
         self.root = root
+        self.importer = ScenarioImporter(self)  # Create instance of ScenarioImporter
         self.canvas = tk.Canvas(root, width=800, height=600)
         self.canvas.pack()
         self.root.title("Deadlock Analyzer")
@@ -15,14 +19,21 @@ class DeadlockApp:
         self.r_counter = 0
         self.nodes = []
         self.edges = []
+        self.dot_ids = []
+        self.dot_positions = []  # List of (x, y) tuples for each dot
+        self.occupied_dots = []  # List of booleans, True if dot is occupied
         self.selected_node = None
         self.edge_start = None
         self.setup_ui()
         self.add_attribution()
         self.canvas.bind("<Button-1>", self.on_click) # Event listener
         self.canvas.bind("<B1-Motion>", self.on_drag) # Event listener
+        self.canvas.bind("<Button-3>", self.change_disponibilities) # Event listener
 
     def setup_ui(self):
+        import_button = tk.Button(self.root, text="Import Graph", command=self.importer.import_graph)
+        import_button.pack(side=tk.RIGHT)
+
         add_p_button = tk.Button(self.root, text="Add Process (P)", command=self.add_process)
         add_p_button.pack(side=tk.LEFT)
 
@@ -45,8 +56,9 @@ class DeadlockApp:
         # anchor="e" aligns text to the right (east)
         self.canvas.create_text(780, 20, text="By Luigi G. Marchetti", anchor="e", font=("Arial", 10))
 
-    def add_process(self):
-        x, y = self.get_random_position()
+    def add_process(self, x=None, y=None):
+        if not x or not y: # if x or y don't have value
+            x, y = self.get_random_position()
         node_id = self.canvas.create_rectangle(x - 25, y - 25, x + 25, y + 25, fill="white", outline="black")
         text_id = self.canvas.create_text(x, y, text=f"P{self.p_counter}")
 
@@ -80,12 +92,42 @@ class DeadlockApp:
 
     def draw_disponibilities(self, node):
         x, y = node.x, node.y
+        node.dot_positions = []
+        node.occupied_dots = [False] * node.disponibilities
         for i in range(node.disponibilities):
-            angle = 2 * math.pi * i / node.disponibilities # Calculate the angle for the current dot
-            dot_x = x + 20 * math.cos(angle) # Calculate the x position of the dot
-            dot_y = y + 20 * math.sin(angle) # Calculate the y position of the dot
+            angle = 2 * math.pi * i / node.disponibilities
+            dot_x = x + 20 * math.cos(angle)
+            dot_y = y + 20 * math.sin(angle)
             dot_id = self.canvas.create_oval(dot_x - 3, dot_y - 3, dot_x + 3, dot_y + 3, fill="black")
             node.dot_ids.append(dot_id)
+            node.dot_positions.append((dot_x, dot_y))
+
+    def change_disponibilities(self, event):
+        # Only is enabled if there are no edges in canvas
+        if len(self.edges) == 0:
+            node = self.find_node_at_position(event.x, event.y)
+            if node and node.node_type == "R":
+                new_disponibilities = simpledialog.askinteger("Change Disponibilities",
+                                                              f"Enter new number of disponibilities for R{node.number}:",
+                                                              minvalue=1, maxvalue=10)
+                if new_disponibilities is not None:
+                    node.disponibilities = new_disponibilities
+                    for dot_id in node.dot_ids:
+                        self.canvas.delete(dot_id)
+                    node.dot_ids.clear()
+                    self.draw_disponibilities(node)
+
+    def add_resource_with_disponibilities(self, disponibilities, x=None, y=None):
+        if not x or not y:  # if x or y don't have value
+            x, y = self.get_random_position()
+        node_id = self.canvas.create_oval(x - 25, y - 25, x + 25, y + 25, fill="white", outline="black")
+        text_id = self.canvas.create_text(x, y, text=f"R{self.r_counter}")
+
+        node = Node(node_id, text_id, "R", self.r_counter, x, y, disponibilities)
+        self.nodes.append(node)
+        self.draw_disponibilities(node)
+
+        self.r_counter += 1
 
     def remove_node(self):
         if self.selected_node:
@@ -96,6 +138,7 @@ class DeadlockApp:
             self.nodes.remove(self.selected_node)
             self.remove_connected_edges(self.selected_node)
             self.selected_node = None
+            self.recalculate_indices()
 
     def remove_connected_edges(self, node):
         edges_to_remove = [edge for edge in self.edges if edge.start == node or edge.end == node]
@@ -108,6 +151,21 @@ class DeadlockApp:
         self.edges = [edge for edge in self.edges if edge.start != node and edge.end != node]
 
         self.redraw_edges()
+
+    def recalculate_indices(self):
+        p_counter = 0
+        r_counter = 0
+        for node in self.nodes:
+            if node.node_type == "P":
+                node.number = p_counter
+                self.canvas.itemconfig(node.text_id, text=f"P{p_counter}")
+                p_counter += 1
+            else:
+                node.number = r_counter
+                self.canvas.itemconfig(node.text_id, text=f"R{r_counter}")
+                r_counter += 1
+        self.p_counter = p_counter
+        self.r_counter = r_counter
 
     def start_add_edge(self):
         self.canvas.bind("<Button-1>", self.on_edge_click)
@@ -124,14 +182,25 @@ class DeadlockApp:
                 self.canvas.bind("<Button-1>", self.on_click)
 
     def add_edge(self, start, end):
-        if (start.node_type == "P" and end.node_type == "R") or (start.node_type == "R" and end.node_type == "P"):
+        if start.node_type == "R" and end.node_type == "P":
+            available_dot = next((i for i, occupied in enumerate(start.occupied_dots) if not occupied), None)
+            if available_dot is not None:
+                edge = Edge(start, end, dot_index=available_dot)
+                self.edges.append(edge)
+                self.draw_edge(edge)
+                start.occupied_dots[available_dot] = True
+            else:
+                messagebox.showerror("Error", "No available resources.")
+        elif start.node_type == "P" and end.node_type == "R":
             edge = Edge(start, end)
             self.edges.append(edge)
             self.draw_edge(edge)
+        else:
+            messagebox.showerror("Error", "Invalid edge connection.")
 
     def draw_edge(self, edge):
-        start_x, start_y = edge.start.x, edge.start.y
-        end_x, end_y = edge.end.x, edge.end.y
+        start_x, start_y = self.get_border_point(edge.start, edge.end.x, edge.end.y)
+        end_x, end_y = self.get_border_point(edge.end, edge.start.x, edge.start.y)
 
         # Count existing edges between these nodes
         existing_edges = sum(1 for e in self.edges if
@@ -153,13 +222,32 @@ class DeadlockApp:
             # Draw straight edge with an arrow at the end of it
             edge.line_id = self.canvas.create_line(start_x, start_y, end_x, end_y, arrow=tk.LAST)
 
+    def get_border_point(self, node, x2, y2):
+        """Calculate the point on the border of a node's boundary where the edge should connect."""
+        x1, y1 = node.x, node.y
+        dx = x2 - x1
+        dy = y2 - y1
+        if node.node_type == "P":  # For processes (rectangles)
+            half_width = 25  # Half the size of the rectangle
+            half_height = 25  # Half the size of the rectangle
+            # Find the largest scaling factor for either the x or y direction
+            scale = min(half_width / abs(dx), half_height / abs(dy)) if dx != 0 and dy != 0 else 1
+            return x1 + dx * scale, y1 + dy * scale
+        elif node.node_type == "R":  # For resources (circles)
+            radius = 25  # Radius of the circle
+            dist = math.sqrt(dx ** 2 + dy ** 2)
+            if dist == 0:  # Prevent division by zero if nodes overlap
+                return x1, y1
+            scale = radius / dist
+            return x1 + dx * scale, y1 + dy * scale
+
     def redraw_edges(self):
         for edge in self.edges:
             self.update_edge_position(edge)
 
     def update_edge_position(self, edge):
-        start_x, start_y = edge.start.x, edge.start.y
-        end_x, end_y = edge.end.x, edge.end.y
+        start_x, start_y = self.get_border_point(edge.start, edge.end.x, edge.end.y)
+        end_x, end_y = self.get_border_point(edge.end, edge.start.x, edge.start.y)
 
         # Count existing edges between these nodes to determine if curvature is needed
         existing_edges = sum(1 for e in self.edges if
@@ -196,13 +284,14 @@ class DeadlockApp:
 
     def on_drag(self, event):
         if self.selected_node:
-            dx = event.x - self.selected_node.x # Calculates the horizontal distance moved
-            dy = event.y - self.selected_node.y # Calculates the vertical distance moved
+            dx = event.x - self.selected_node.x
+            dy = event.y - self.selected_node.y
             self.canvas.move(self.selected_node.id, dx, dy)
             self.canvas.move(self.selected_node.text_id, dx, dy)
             self.selected_node.x = event.x
             self.selected_node.y = event.y
-            self.update_node_disponibilities(self.selected_node)
+            if self.selected_node.node_type == "R":
+                self.update_node_disponibilities(self.selected_node)
             self.redraw_edges()
 
     def update_node_disponibilities(self, node):
@@ -210,7 +299,12 @@ class DeadlockApp:
             for dot_id in node.dot_ids:
                 self.canvas.delete(dot_id)
             node.dot_ids.clear()
+            node.dot_positions.clear()
             self.draw_disponibilities(node)
+            # Update edge positions
+            for edge in self.edges:
+                if edge.start == node:
+                    self.update_edge_position(edge)
 
     def find_node_at_position(self, x, y):
         for node in self.nodes:
@@ -370,10 +464,11 @@ class Node:
 
 
 class Edge:
-    def __init__(self, start, end):
+    def __init__(self, start, end, dot_index=None):
         self.start = start
         self.end = end
         self.line_id = None
+        self.dot_index = dot_index
 
 
 if __name__ == "__main__": # Only runs the app when the user runs this class
