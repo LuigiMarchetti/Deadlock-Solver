@@ -249,35 +249,43 @@ class DeadlockApp:
         start_x, start_y = self.get_border_point(edge.start, edge.end.x, edge.end.y)
         end_x, end_y = self.get_border_point(edge.end, edge.start.x, edge.start.y)
 
-        # Count existing edges between these nodes to determine if curvature is needed
-        existing_edges = sum(1 for e in self.edges if
-                             (e.start == edge.start and e.end == edge.end) or
-                             (e.start == edge.end and e.end == edge.start))
+        # Count existing edges between these nodes
+        existing_edges = [e for e in self.edges if
+                          (e.start == edge.start and e.end == edge.end) or
+                          (e.start == edge.end and e.end == edge.start)]
+        edge_count = len(existing_edges)
 
-        if existing_edges == 1:
-            # For the first edge, always draw a straight line
+        if edge_count == 1:
+            # For single edge, draw a straight line
             self.canvas.coords(edge.line_id, start_x, start_y, end_x, end_y)
+            self.canvas.itemconfig(edge.line_id, smooth=False)
         else:
-            # For multiple edges, draw curved lines for subsequent edges
-            for index, e in enumerate(self.edges):
-                if (e.start == edge.start and e.end == edge.end) or (e.start == edge.end and e.end == edge.start):
-                    # Calculate curve index (first edge is straight, so others start from index 1)
-                    curve_index = index - 1  # The first edge (index 0) is straight
-                    curve_factor = 0.2 * curve_index  # Control the curvature based on index
+            # For multiple edges, determine the arrow direction
+            last_edge = existing_edges[edge_count - 1]
+            last_start_x, last_start_y = self.get_border_point(last_edge.start, last_edge.end.x, last_edge.end.y)
+            last_end_x, last_end_y = self.get_border_point(last_edge.end, last_edge.start.x, last_edge.start.y)
 
-                    # Calculate mid-point between start and end points
-                    mid_x = (start_x + end_x) / 2
-                    mid_y = (start_y + end_y) / 2
+            # Determine the curvature direction based on the last edge
+            if last_start_x < last_end_x:  # Arrow points to the right
+                curve_direction = 1  # Curvature should go down
+            else:  # Arrow points to the left
+                curve_direction = -1  # Curvature should go up
 
-                    # Calculate control point based on curvature
-                    control_x = mid_x + (start_y - end_y) * curve_factor
-                    control_y = mid_y - (start_x - end_x) * curve_factor
+            # Calculate the midpoint and perpendicular vector
+            mid_x, mid_y = (start_x + end_x) / 2, (start_y + end_y) / 2
+            dx, dy = end_x - start_x, end_y - start_y
+            length = math.sqrt(dx * dx + dy * dy)
+            if length == 0:  # Prevent division by zero
+                return
+            perpendicular_x, perpendicular_y = -dy / length, dx / length
 
-                    # Update the edge to be a curved line with smooth steps
-                    self.canvas.coords(e.line_id, start_x, start_y, control_x, control_y, end_x, end_y)
+            # Calculate control point with consistent curvature direction
+            control_x = mid_x + curve_direction * perpendicular_x * 0.2 * length
+            control_y = mid_y + curve_direction * perpendicular_y * 0.2 * length
 
-                    # Apply smooth line with spline steps
-                    self.canvas.itemconfig(e.line_id, smooth=True, splinesteps=32)
+            # Update the edge to be a curved line
+            self.canvas.coords(edge.line_id, start_x, start_y, control_x, control_y, end_x, end_y)
+            self.canvas.itemconfig(edge.line_id, smooth=True, splinesteps=32)
 
     def on_click(self, event):
         self.selected_node = self.find_node_at_position(event.x, event.y)
@@ -288,11 +296,19 @@ class DeadlockApp:
             dy = event.y - self.selected_node.y
             self.canvas.move(self.selected_node.id, dx, dy)
             self.canvas.move(self.selected_node.text_id, dx, dy)
+
+            # Update the node's position
             self.selected_node.x = event.x
             self.selected_node.y = event.y
+
+            # Update edge positions if the node is a resource
             if self.selected_node.node_type == "R":
                 self.update_node_disponibilities(self.selected_node)
-            self.redraw_edges()
+
+            # Redraw edges connected to the moved node
+            for edge in self.edges:
+                if edge.start == self.selected_node or edge.end == self.selected_node:
+                    self.update_edge_position(edge)
 
     def update_node_disponibilities(self, node):
         if node.node_type == "R":
