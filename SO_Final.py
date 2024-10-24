@@ -183,7 +183,7 @@ class DeadlockApp:
 
     def add_edge(self, start, end):
         if start.node_type == "R" and end.node_type == "P":
-            available_dot = next((i for i, occupied in enumerate(start.occupied_dots) if not occupied), None)
+            available_dot = next((i for i, occupied in enumerate(start.occupied_dots) if not occupied), None) # Gets the first found or None
             if available_dot is not None:
                 edge = Edge(start, end, dot_index=available_dot)
                 self.edges.append(edge)
@@ -229,13 +229,13 @@ class DeadlockApp:
             edge.line_id = self.canvas.create_line(start_x, start_y, end_x, end_y, arrow=tk.LAST)
 
     def get_dot_position(self, node, dot_index):
-        """Retrieve the position of the specified dot for a given node."""
+        # Retrieve the position of the specified dot for a given node
         if dot_index is not None and 0 <= dot_index < len(node.dot_positions):
             return node.dot_positions[dot_index]
         return node.x, node.y  # Fallback to the node's center if no dot is specified
 
     def get_border_point(self, node, x2, y2):
-        """Calculate the point on the border of a node's boundary where the edge should connect."""
+        # Calculate the point on the border of a node's boundary where the edge should connect
         x1, y1 = node.x, node.y
         dx = x2 - x1
         dy = y2 - y1
