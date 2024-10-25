@@ -52,7 +52,7 @@ class DeadlockApp:
         clear_button = tk.Button(self.root, text="Clear All", command=self.clear_all)
         clear_button.pack(side=tk.LEFT)
 
-        # Add key binding for 'r' key
+        # Add key binding for the main buttons key
         self.root.bind('r', lambda event: self.add_resource())
         self.root.bind('R', lambda event: self.add_resource())  # Also bind capital R
 
