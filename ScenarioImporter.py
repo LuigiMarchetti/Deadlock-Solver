@@ -11,6 +11,11 @@ class ScenarioImporter:
         # Get the current working directory (project directory)
         project_directory = os.getcwd()
 
+        # Ensure scenarios directory exists
+        scenarios_dir = os.path.join(project_directory, "scenarios")
+        if not os.path.exists(scenarios_dir):
+            os.makedirs(scenarios_dir)
+
         # Open file dialog, defaulting to the project's root directory
         file_path = filedialog.askopenfilename(
             title="Select Graph File",

@@ -3,13 +3,15 @@ from tkinter import simpledialog, messagebox
 import random
 import math
 
+from ScenarioExporter import ScenarioExporter
 from ScenarioImporter import ScenarioImporter
 
 
 class DeadlockApp:
     def __init__(self, root):
         self.root = root
-        self.importer = ScenarioImporter(self)  # Create instance of ScenarioImporter
+        self.importer = ScenarioImporter(self) # Creates instance of ScenarioImporter
+        self.exporter = ScenarioExporter(self) # Creates instance of ScenarioExporter
         self.canvas = tk.Canvas(root, width=800, height=600)
         self.canvas.pack()
         self.root.title("Deadlock Analyzer")
@@ -33,6 +35,9 @@ class DeadlockApp:
     def setup_ui(self):
         import_button = tk.Button(self.root, text="Import Graph", command=self.importer.import_graph)
         import_button.pack(side=tk.RIGHT)
+
+        export_button = tk.Button(self.root, text="Export Graph", command=self.exporter.export_graph)
+        export_button.pack(side=tk.RIGHT)
 
         add_p_button = tk.Button(self.root, text="Add Process (P)", command=self.add_process)
         add_p_button.pack(side=tk.LEFT)
@@ -64,7 +69,7 @@ class DeadlockApp:
 
     def add_attribution(self):
         # anchor="e" aligns text to the right (east)
-        self.canvas.create_text(780, 20, text="By Luigi G. Marchetti", anchor="e", font=("Arial", 10))
+        self.canvas.create_text(780, 20, text="By Luigi Garcia Marchetti", anchor="e", font=("Arial", 10))
 
     def add_process(self, x=None, y=None):
         if not x or not y: # if x or y don't have value
