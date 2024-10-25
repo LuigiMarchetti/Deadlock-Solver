@@ -40,17 +40,27 @@ class DeadlockApp:
         add_r_button = tk.Button(self.root, text="Add Resource (R)", command=self.add_resource)
         add_r_button.pack(side=tk.LEFT)
 
+        add_edge_button = tk.Button(self.root, text="Add Edge (A)", command=self.start_add_edge)
+        add_edge_button.pack(side=tk.LEFT)
+
         remove_button = tk.Button(self.root, text="Remove Node", command=self.remove_node)
         remove_button.pack(side=tk.LEFT)
-
-        add_edge_button = tk.Button(self.root, text="Add Edge", command=self.start_add_edge)
-        add_edge_button.pack(side=tk.LEFT)
 
         solve_button = tk.Button(self.root, text="Avoid Deadlock", command=self.avoid_deadlock)
         solve_button.pack(side=tk.LEFT)
 
         clear_button = tk.Button(self.root, text="Clear All", command=self.clear_all)
         clear_button.pack(side=tk.LEFT)
+
+        # Add key binding for 'r' key
+        self.root.bind('r', lambda event: self.add_resource())
+        self.root.bind('R', lambda event: self.add_resource())  # Also bind capital R
+
+        self.root.bind('p', lambda event: self.add_process())
+        self.root.bind('P', lambda event: self.add_process())  # Also bind capital P
+
+        self.root.bind('a', lambda event: self.start_add_edge())
+        self.root.bind('A', lambda event: self.start_add_edge())  # Also bind capital A
 
     def add_attribution(self):
         # anchor="e" aligns text to the right (east)
@@ -145,6 +155,9 @@ class DeadlockApp:
 
         # Delete the graphical representation of the edges from the canvas
         for edge in edges_to_remove:
+            if edge.start.node_type == "R":
+                # Free up the dot that was being used by this edge
+                edge.start.occupied_dots[edge.dot_index] = False
             self.canvas.delete(edge.line_id)
 
         # Remove the edges from the edges list
@@ -183,7 +196,7 @@ class DeadlockApp:
 
     def add_edge(self, start, end):
         if start.node_type == "R" and end.node_type == "P":
-            available_dot = next((i for i, occupied in enumerate(start.occupied_dots) if not occupied), None) # Gets the first found or None
+            available_dot = self.recalculate_dot_availability(start)
             if available_dot is not None:
                 edge = Edge(start, end, dot_index=available_dot)
                 self.edges.append(edge)
@@ -197,6 +210,24 @@ class DeadlockApp:
             self.draw_edge(edge, start, end)
         else:
             messagebox.showerror("Error", "Invalid edge connection.")
+
+
+    #Recalculates which dots are occupied for a given resource node based on existing edges.
+    #Returns the index of the first available dot, or None if all dots are occupied.
+    def recalculate_dot_availability(self, resource_node):
+        # Reset all dots to unoccupied
+        resource_node.occupied_dots = [False] * resource_node.disponibilities
+
+        # Mark dots as occupied based on existing edges
+        for edge in self.edges:
+            if edge.start == resource_node:
+                resource_node.occupied_dots[edge.dot_index] = True
+
+        # Find and return the first available dot
+        for i, occupied in enumerate(resource_node.occupied_dots):
+            if not occupied:
+                return i
+        return None
 
     def draw_edge(self, edge, start, end):
         if start.node_type == "R":
@@ -472,6 +503,9 @@ class DeadlockApp:
 
     def remove_edges_and_continue(self, edges_to_remove, remaining_steps):
         for edge in edges_to_remove:
+            if edge.start.node_type == "R":
+                # Free up the dot that was being used by this edge
+                edge.start.occupied_dots[edge.dot_index] = False
             self.canvas.delete(edge.line_id)
             self.edges.remove(edge)
 
