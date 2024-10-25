@@ -3,8 +3,8 @@ from tkinter import simpledialog, messagebox
 import random
 import math
 
-from ScenarioExporter import ScenarioExporter
-from ScenarioImporter import ScenarioImporter
+from Scenario_Exporter import ScenarioExporter
+from Scenario_Importer import ScenarioImporter
 
 
 class DeadlockApp:
